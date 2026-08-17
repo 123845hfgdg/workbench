@@ -77,6 +77,7 @@
   .checkin-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-accent); }
   .checkin-btn:active { transform: scale(0.98); }
   .checkin-btn.checked { background: var(--muted); color: var(--muted-foreground); box-shadow: none; }
+  .checkin-btn:disabled { cursor: not-allowed; opacity: 0.7; transform: none; }
 
   .checkin-sub { font-size: 13px; color: var(--muted-foreground); }
 
@@ -101,12 +102,12 @@
     display: flex;
     height: calc(100vh - 68px);
     gap: 16px;
-    padding: 16px;
+    padding: 40px 24px 24px;
   }
 
   .nav {
-    width: 190px;
-    flex: 0 0 190px;
+    width: 160px;
+    flex: 0 0 160px;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -151,7 +152,7 @@
     align-items: flex-end;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 14px;
+    margin-bottom: 22px;
   }
   .page-head h2 { margin: 6px 0 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
 
@@ -180,9 +181,9 @@
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    grid-template-rows: 1fr 1fr;
+    grid-template-rows: auto auto;
     gap: 16px;
-    height: calc(100% - 58px);
+    height: auto;
   }
 
   .card {
@@ -258,16 +259,42 @@
 
   .empty { color: var(--muted-foreground); font-size: 14px; line-height: 1.6; padding: 10px 0; }
 
-  .reaction { align-items: center; justify-content: center; text-align: center; transition: background 0.16s ease; }
-  .reaction.is-wait { background: #EF4444; color: #fff; border-color: #EF4444; }
-  .reaction.is-go { background: #10B981; color: #fff; border-color: #10B981; }
+  .todo-card { grid-column: 1; grid-row: 1; }
+  .countdown-card { grid-column: 1; grid-row: 2; }
+
+  .card.reaction-merge {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    align-items: stretch;
+  }
+
+  .reaction-zone {
+    border-radius: 14px;
+    background: var(--muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 16px;
+    min-height: 100%;
+    transition: background 0.16s ease;
+  }
+  .reaction-zone.is-wait { background: #EF4444; color: #fff; }
+  .reaction-zone.is-go { background: #10B981; color: #fff; }
+
+  .records-zone { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+
   .re-progress { font-size: 15px; font-weight: 600; }
   .re-btn {
     width: 140px; height: 140px; border-radius: 50%;
     border: none; cursor: pointer; background: #fff; color: var(--foreground);
     font-size: 20px; font-weight: 700; margin: 12px 0; box-shadow: var(--shadow-md);
   }
-  .reaction.is-go .re-btn { animation: pulse 0.85s ease-in-out infinite; }
+  .reaction-zone.is-go .re-btn { animation: pulse 0.85s ease-in-out infinite; }
   @keyframes pulse { 0%,100%{transform:scale(1);} 50%{transform:scale(1.05);} }
   .re-hint { font-size: 14px; min-height: 20px; }
   .re-last { font-size: 14px; font-weight: 600; min-height: 20px; }
@@ -318,6 +345,8 @@
     .nav-item { white-space: nowrap; }
     .content { overflow: visible; }
     .grid { grid-template-columns: 1fr; grid-template-rows: none; height: auto; }
+    .todo-card, .countdown-card, .card.reaction-merge { grid-column: auto; grid-row: auto; }
+    .card.reaction-merge { grid-template-columns: 1fr; }
     .card { min-height: 280px; }
   }
 </style>
@@ -355,7 +384,7 @@
           </div>
         </div>
         <div class="grid">
-          <div class="card">
+          <div class="card todo-card">
             <div class="card-title">今日待办</div>
             <div class="todo-add">
               <input type="text" id="todoInput" placeholder="添加待办…">
@@ -364,23 +393,24 @@
             <div class="list" id="todoList"></div>
           </div>
 
-          <div class="card reaction" id="reactionCard">
-            <div class="re-progress" id="reProgress">点击开始 7 次测试</div>
-            <button class="re-btn" id="reBtn">开始测试</button>
-            <div class="re-hint" id="reHint">红色等待，变绿点击</div>
-            <div class="re-last" id="reLast"></div>
-            <div class="re-summary" id="reSummary"></div>
+          <div class="card reaction-merge" id="reactionCard">
+            <div class="reaction-zone" id="reactionZone">
+              <div class="re-progress" id="reProgress">点击开始 7 次测试</div>
+              <button class="re-btn" id="reBtn">开始测试</button>
+              <div class="re-hint" id="reHint">红色等待，变绿点击</div>
+              <div class="re-last" id="reLast"></div>
+              <div class="re-summary" id="reSummary"></div>
+            </div>
+            <div class="records-zone">
+              <div class="card-title">每日记录</div>
+              <div class="list" id="recordList"></div>
+            </div>
           </div>
 
-          <div class="card">
+          <div class="card countdown-card">
             <div class="card-title">时间记录</div>
             <button class="mini-btn" id="cdAddBtn">添加倒数日</button>
             <div class="list" id="cdList" style="margin-top:10px;"></div>
-          </div>
-
-          <div class="card">
-            <div class="card-title">每日记录</div>
-            <div class="list" id="recordList"></div>
           </div>
         </div>
       </section>
@@ -569,9 +599,11 @@
       if (!code) { checkinSub.textContent = '连续签到 0 天'; return Promise.resolve(); }
       return apiFetch('checkins?code=eq.' + enc(code) + '&select=day', 'GET').then(function (rows) {
         var days = (rows || []).map(function (r) { return r.day; });
+        var checked = days.indexOf(todayKey()) >= 0;
         checkinSub.textContent = '连续签到 ' + computeStreak(days) + ' 天';
-        checkinBtn.textContent = days.indexOf(todayKey()) >= 0 ? '今日已签到' : '签到';
-        checkinBtn.classList.toggle('checked', days.indexOf(todayKey()) >= 0);
+        checkinBtn.textContent = checked ? '今日已签到' : '签到';
+        checkinBtn.disabled = checked;
+        checkinBtn.classList.toggle('checked', checked);
       }).catch(function () {});
     }
 
@@ -684,7 +716,7 @@
       }).catch(function () {});
     });
 
-    var reactionCard = document.getElementById('reactionCard');
+    var reactionZone = document.getElementById('reactionZone');
     var reBtn = document.getElementById('reBtn');
     var reHint = document.getElementById('reHint');
     var reLast = document.getElementById('reLast');
@@ -702,8 +734,8 @@
       if (rePauseTimer) { clearTimeout(rePauseTimer); rePauseTimer = null; }
     }
     function setReVisual(cls) {
-      reactionCard.classList.remove('is-wait', 'is-go');
-      if (cls) reactionCard.classList.add(cls);
+      reactionZone.classList.remove('is-wait', 'is-go');
+      if (cls) reactionZone.classList.add(cls);
     }
     function reProgressText() {
       if (reState === 'idle' || reState === 'done') return '点击开始 7 次测试';
