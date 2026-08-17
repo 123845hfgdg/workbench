@@ -157,7 +157,7 @@
 
   .records-head { margin-bottom: 14px; }
   .records-head h2 { margin: 0 0 4px; font-size: 20px; }
-  .records-sub { font-size: 12px; opacity: 0.65; }
+  .records-sub { font-size: 12px; opacity: 0.65; word-break: break-all; }
 
   .record-list {
     flex: 1;
@@ -214,8 +214,14 @@
     opacity: 0.65;
   }
 
-  .clear {
+  .records-actions {
+    display: flex;
+    gap: 10px;
     margin-top: 14px;
+  }
+
+  .clear {
+    flex: 1;
     border: 1px solid rgba(255, 255, 255, 0.18);
     background: transparent;
     color: rgba(255, 255, 255, 0.75);
@@ -226,6 +232,58 @@
   }
 
   .clear:hover { background: rgba(255, 255, 255, 0.08); }
+
+  .modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 20px;
+  }
+
+  .modal-box {
+    background: #202634;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 18px;
+    padding: 24px;
+    width: 100%;
+    max-width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .modal-title { font-size: 19px; font-weight: 700; }
+
+  .modal-desc {
+    font-size: 14px;
+    opacity: 0.8;
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  #codeInput {
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: #151923;
+    color: #fff;
+    font-size: 15px;
+  }
+
+  #codeSave {
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    background: #22b573;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+  }
 
   @media (max-width: 980px) {
     body { overflow: auto; }
@@ -255,15 +313,30 @@
     <aside class="records">
       <div class="records-head">
         <h2>每日记录</h2>
-        <div class="records-sub">自动保存在本机浏览器</div>
+        <div class="records-sub" id="syncCodeLabel">同步口令：—</div>
       </div>
       <div class="record-list" id="recordList"></div>
-      <button class="clear" id="clearBtn">清空记录</button>
+      <div class="records-actions">
+        <button class="clear" id="changeCodeBtn">更换口令</button>
+        <button class="clear" id="clearBtn">清空记录</button>
+      </div>
     </aside>
+  </div>
+
+  <div class="modal" id="modal">
+    <div class="modal-box">
+      <div class="modal-title">设置同步口令</div>
+      <p class="modal-desc">在每台设备上输入同一个口令，每天的记录就会同步到一起。</p>
+      <input id="codeInput" maxlength="24" placeholder="例如：gongzuotai2026">
+      <button id="codeSave">保存并开始同步</button>
+    </div>
   </div>
 
 <script>
   (function () {
+    var SUPABASE_URL = 'https://spmwdhiyfpkcuvnbufqy.supabase.co';
+    var SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNwbXdkaGl5ZnBrY3V2bmJ1ZnF5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5NTc2NTMsImV4cCI6MjEwMjUzMzY1M30.AakbPcfXfKHZnRm3CzdyupR5zvgIbFde95mW50HFbeo';
+
     var main = document.getElementById('main');
     var btn = document.getElementById('btn');
     var hint = document.getElementById('hint');
@@ -271,10 +344,15 @@
     var progress = document.getElementById('progress');
     var summary = document.getElementById('summary');
     var recordList = document.getElementById('recordList');
+    var syncCodeLabel = document.getElementById('syncCodeLabel');
+    var modal = document.getElementById('modal');
+    var codeInput = document.getElementById('codeInput');
+    var codeSave = document.getElementById('codeSave');
+    var changeCodeBtn = document.getElementById('changeCodeBtn');
     var clearBtn = document.getElementById('clearBtn');
 
     var TOTAL = 7;
-    var STORAGE_KEY = 'reaction_daily_records_v1';
+    var CODE_KEY = 'syncCode';
 
     var state = 'idle'; // idle | wait | go | paused | done
     var results = [];
@@ -282,6 +360,7 @@
     var pauseTimer = null;
     var goTime = 0;
 
+    // ---------- 视觉与状态 ----------
     function clearTimers() {
       if (timer) { clearTimeout(timer); timer = null; }
       if (pauseTimer) { clearTimeout(pauseTimer); pauseTimer = null; }
@@ -350,8 +429,7 @@
       hint.textContent = '本轮 7 次已完成';
       progress.textContent = '本轮完成';
       renderSummary();
-      addToday(results);
-      renderRecords();
+      saveToday(results).then(loadRecords);
     }
 
     function renderSummary() {
@@ -365,65 +443,6 @@
         '<div class="summary-title">本轮结果</div>' +
         '<div class="chips">' + chips + '</div>' +
         '<div class="summary-stats">本轮最快 ' + Math.round(best) + ' ms · 本轮平均 ' + avg + ' ms</div>';
-    }
-
-    // ---------- 数据留存 ----------
-    function loadRecords() {
-      try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
-      catch (e) { return {}; }
-    }
-
-    function saveRecords(obj) {
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(obj)); }
-      catch (e) {}
-    }
-
-    function todayKey() {
-      var d = new Date();
-      var m = ('0' + (d.getMonth() + 1)).slice(-2);
-      var day = ('0' + d.getDate()).slice(-2);
-      return d.getFullYear() + '-' + m + '-' + day;
-    }
-
-    function addToday(times) {
-      var obj = loadRecords();
-      var key = todayKey();
-      var arr = (obj[key] || []).concat(times);
-      if (arr.length > 2000) arr = arr.slice(-2000);
-      obj[key] = arr;
-      saveRecords(obj);
-    }
-
-    function formatDate(key) {
-      var p = key.split('-');
-      return parseInt(p[1], 10) + '月' + parseInt(p[2], 10) + '日';
-    }
-
-    function renderRecords() {
-      var obj = loadRecords();
-      var keys = Object.keys(obj).sort().reverse();
-      recordList.innerHTML = '';
-
-      if (!keys.length) {
-        recordList.innerHTML = '<div class="empty">还没有记录，完成一轮后会自动出现在这里。</div>';
-        return;
-      }
-
-      var tk = todayKey();
-      keys.forEach(function (key) {
-        var arr = obj[key];
-        var best = arr.reduce(function (m, v) { return v < m ? v : m; }, Infinity);
-        var avg = Math.round(arr.reduce(function (a, b) { return a + b; }, 0) / arr.length);
-
-        var row = document.createElement('div');
-        row.className = 'record-row' + (key === tk ? ' today' : '');
-        row.innerHTML =
-          '<div class="date">' + formatDate(key) +
-            '<small>' + (key === tk ? '今天 · ' : '') + arr.length + ' 次</small></div>' +
-          '<div class="metric"><b>' + Math.round(best) + '</b><small>最快 ms</small></div>' +
-          '<div class="metric"><b>' + avg + '</b><small>平均 ms</small></div>';
-        recordList.appendChild(row);
-      });
     }
 
     // ---------- 每日一句 ----------
@@ -471,6 +490,119 @@
       document.getElementById('quoteText').textContent = QUOTES[idx % QUOTES.length];
     }
 
+    // ---------- 同步口令 ----------
+    function getCode() { return localStorage.getItem(CODE_KEY) || ''; }
+    function setCode(v) { localStorage.setItem(CODE_KEY, v || ''); }
+
+    function showModal() {
+      modal.style.display = 'flex';
+      setTimeout(function () { codeInput.focus(); }, 50);
+    }
+
+    function hideModal() { modal.style.display = 'none'; }
+
+    function ensureCode() {
+      var code = getCode();
+      syncCodeLabel.textContent = code ? ('同步口令：' + code) : '同步口令：未设置';
+      if (!code) showModal();
+      return code;
+    }
+
+    // ---------- 数据库 ----------
+    function enc(v) { return encodeURIComponent(v); }
+
+    function supabaseRequest(path, method, body) {
+      var headers = {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json'
+      };
+      var opts = { method: method, headers: headers };
+      if (body !== undefined && body !== null) {
+        opts.body = JSON.stringify(body);
+      }
+      return fetch(SUPABASE_URL + '/rest/v1/' + path, opts).then(function (res) {
+        if (!res.ok) {
+          return res.text().then(function (t) { throw new Error(method + ' ' + res.status + ' ' + t); });
+        }
+        if (res.status === 204) return null;
+        return res.json();
+      });
+    }
+
+    function todayKey() {
+      var d = new Date();
+      var m = ('0' + (d.getMonth() + 1)).slice(-2);
+      var day = ('0' + d.getDate()).slice(-2);
+      return d.getFullYear() + '-' + m + '-' + day;
+    }
+
+    function formatDate(key) {
+      var p = key.split('-');
+      return parseInt(p[1], 10) + '月' + parseInt(p[2], 10) + '日';
+    }
+
+    function loadRecords() {
+      var code = getCode();
+      if (!code) {
+        recordList.innerHTML = '<div class="empty">设置同步口令后，记录会显示在这里。</div>';
+        return Promise.resolve();
+      }
+      recordList.innerHTML = '<div class="empty">加载中…</div>';
+      return supabaseRequest('records?code=eq.' + enc(code) + '&order=day.desc', 'GET').then(function (rows) {
+        renderRecordRows(rows || []);
+      }).catch(function () {
+        recordList.innerHTML = '<div class="empty">暂时连不上数据库，请确认已完成设置后刷新页面。</div>';
+      });
+    }
+
+    function renderRecordRows(rows) {
+      recordList.innerHTML = '';
+      if (!rows.length) {
+        recordList.innerHTML = '<div class="empty">还没有记录，完成一轮后会自动同步到这里。</div>';
+        return;
+      }
+      var tk = todayKey();
+      rows.forEach(function (row) {
+        var arr = row.times || [];
+        if (!arr.length) return;
+        var best = arr.reduce(function (m, v) { return v < m ? v : m; }, Infinity);
+        var avg = Math.round(arr.reduce(function (a, b) { return a + b; }, 0) / arr.length);
+        var el = document.createElement('div');
+        el.className = 'record-row' + (row.day === tk ? ' today' : '');
+        el.innerHTML =
+          '<div class="date">' + formatDate(row.day) +
+            '<small>' + (row.day === tk ? '今天 · ' : '') + arr.length + ' 次</small></div>' +
+          '<div class="metric"><b>' + Math.round(best) + '</b><small>最快 ms</small></div>' +
+          '<div class="metric"><b>' + avg + '</b><small>平均 ms</small></div>';
+        recordList.appendChild(el);
+      });
+    }
+
+    function saveToday(times) {
+      var code = getCode();
+      if (!code) return Promise.resolve();
+      var day = todayKey();
+      return supabaseRequest('records?code=eq.' + enc(code) + '&day=eq.' + day + '&select=id,times&limit=1', 'GET').then(function (rows) {
+        if (rows && rows.length) {
+          var merged = (rows[0].times || []).concat(times);
+          if (merged.length > 2000) merged = merged.slice(-2000);
+          return supabaseRequest('records?id=eq.' + enc(rows[0].id), 'PATCH', { times: merged });
+        }
+        return supabaseRequest('records', 'POST', { code: code, day: day, times: times });
+      }).catch(function (err) {
+        console.error(err);
+      });
+    }
+
+    function clearRecords() {
+      var code = getCode();
+      if (!code) return Promise.resolve();
+      return supabaseRequest('records?code=eq.' + enc(code), 'DELETE').catch(function (err) {
+        console.error(err);
+      });
+    }
+
     // ---------- 交互 ----------
     btn.addEventListener('click', function () {
       if (state === 'idle' || state === 'done') {
@@ -485,7 +617,6 @@
       } else if (state === 'go') {
         record(performance.now() - goTime);
       }
-      // paused 状态下点击无效
     });
 
     document.addEventListener('keydown', function (e) {
@@ -495,16 +626,34 @@
       }
     });
 
+    codeSave.addEventListener('click', function () {
+      var v = codeInput.value.trim();
+      if (!v) { codeInput.focus(); return; }
+      setCode(v);
+      hideModal();
+      syncCodeLabel.textContent = '同步口令：' + v;
+      loadRecords();
+    });
+
+    codeInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') codeSave.click();
+    });
+
+    changeCodeBtn.addEventListener('click', function () {
+      codeInput.value = getCode();
+      showModal();
+    });
+
     clearBtn.addEventListener('click', function () {
-      if (confirm('确定清空所有每日记录吗？此操作不可恢复。')) {
-        try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
-        renderRecords();
+      if (confirm('确定清空当前口令下的所有每日记录吗？此操作不可恢复。')) {
+        clearRecords().then(loadRecords);
       }
     });
 
     renderProgress();
     renderQuote();
-    renderRecords();
+    ensureCode();
+    loadRecords();
   })();
 </script>
 </body>
