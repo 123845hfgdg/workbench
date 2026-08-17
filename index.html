@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工作台</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body { height: 100%; margin: 0; }
+
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+    background: #141821;
+    color: #fff;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  .layout {
+    display: flex;
+    width: 100%;
+    height: 100vh;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .main {
+    flex: 1;
+    min-width: 0;
+    border-radius: 22px;
+    background: #1f2430;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 28px;
+    text-align: center;
+    transition: background 0.16s ease;
+    overflow: auto;
+  }
+
+  .main.is-wait { background: #d64545; }
+  .main.is-go   { background: #22b573; }
+
+  .progress {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    opacity: 0.95;
+  }
+
+  .button {
+    width: min(58vw, 230px);
+    height: min(58vw, 230px);
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: #222;
+    background: #fff;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+    transition: transform 0.12s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    line-height: 1.25;
+  }
+
+  .button:hover { transform: translateY(-2px); }
+  .button:active { transform: scale(0.96); }
+
+  .main.is-wait .button { cursor: not-allowed; }
+  .main.is-go .button { animation: pulse 0.85s ease-in-out infinite; }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+  }
+
+  .hint { font-size: 16px; opacity: 0.92; min-height: 24px; }
+  .last { font-size: 18px; font-weight: 600; min-height: 28px; }
+
+  .summary {
+    max-width: 720px;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 16px;
+    padding: 16px;
+  }
+
+  .summary-title { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 12px;
+  }
+
+  .chip {
+    background: rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .summary-stats { font-size: 16px; font-weight: 700; }
+
+  .quote {
+    width: 250px;
+    flex: 0 0 250px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 22px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .quote-head {
+    font-size: 13px;
+    letter-spacing: 2px;
+    opacity: 0.7;
+  }
+
+  .quote-date {
+    font-size: 13px;
+    opacity: 0.65;
+  }
+
+  .quote-text {
+    font-size: 17px;
+    line-height: 1.7;
+    font-weight: 600;
+  }
+
+  .records {
+    width: 360px;
+    flex: 0 0 360px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 22px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .records-head { margin-bottom: 14px; }
+  .records-head h2 { margin: 0 0 4px; font-size: 20px; }
+  .records-sub { font-size: 12px; opacity: 0.65; }
+
+  .record-list {
+    flex: 1;
+    overflow: auto;
+    min-height: 0;
+  }
+
+  .empty {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 14px;
+    line-height: 1.6;
+    padding-top: 20px;
+  }
+
+  .record-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 2px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .record-row.today .date { color: #7de0a8; }
+
+  .date {
+    font-size: 15px;
+    font-weight: 600;
+    min-width: 0;
+  }
+
+  .date small {
+    display: block;
+    font-size: 11px;
+    font-weight: 400;
+    opacity: 0.65;
+    margin-top: 2px;
+  }
+
+  .metric {
+    text-align: right;
+    min-width: 64px;
+  }
+
+  .metric b {
+    display: block;
+    font-size: 18px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .metric small {
+    display: block;
+    font-size: 11px;
+    opacity: 0.65;
+  }
+
+  .clear {
+    margin-top: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.75);
+    border-radius: 10px;
+    padding: 10px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+
+  .clear:hover { background: rgba(255, 255, 255, 0.08); }
+
+  @media (max-width: 980px) {
+    body { overflow: auto; }
+    .layout { flex-direction: column; height: auto; min-height: 100vh; }
+    .quote { width: 100%; flex: none; }
+    .main { min-height: 62vh; }
+    .records { width: 100%; flex: none; min-height: 320px; max-height: 42vh; }
+  }
+</style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="quote">
+      <div class="quote-head">每日一句</div>
+      <div class="quote-date" id="quoteDate"></div>
+      <div class="quote-text" id="quoteText"></div>
+    </aside>
+
+    <section class="main" id="main">
+      <div class="progress" id="progress">点击按钮开始 7 次测试</div>
+      <button class="button" id="btn">开始测试</button>
+      <div class="hint" id="hint">红色时等待，变绿后立刻点击</div>
+      <div class="last" id="last"></div>
+      <div class="summary" id="summary"></div>
+    </section>
+
+    <aside class="records">
+      <div class="records-head">
+        <h2>每日记录</h2>
+        <div class="records-sub">自动保存在本机浏览器</div>
+      </div>
+      <div class="record-list" id="recordList"></div>
+      <button class="clear" id="clearBtn">清空记录</button>
+    </aside>
+  </div>
+
+<script>
+  (function () {
+    var main = document.getElementById('main');
+    var btn = document.getElementById('btn');
+    var hint = document.getElementById('hint');
+    var last = document.getElementById('last');
+    var progress = document.getElementById('progress');
+    var summary = document.getElementById('summary');
+    var recordList = document.getElementById('recordList');
+    var clearBtn = document.getElementById('clearBtn');
+
+    var TOTAL = 7;
+    var STORAGE_KEY = 'reaction_daily_records_v1';
+
+    var state = 'idle'; // idle | wait | go | paused | done
+    var results = [];
+    var timer = null;
+    var pauseTimer = null;
+    var goTime = 0;
+
+    function clearTimers() {
+      if (timer) { clearTimeout(timer); timer = null; }
+      if (pauseTimer) { clearTimeout(pauseTimer); pauseTimer = null; }
+    }
+
+    function setVisual(cls) {
+      main.classList.remove('is-wait', 'is-go');
+      if (cls) main.classList.add(cls);
+    }
+
+    function renderProgress() {
+      if (state === 'idle' || state === 'done') {
+        progress.textContent = '点击按钮开始 7 次测试';
+      } else {
+        progress.textContent = '第 ' + (results.length + 1) + ' / ' + TOTAL + ' 次';
+      }
+    }
+
+    function beginRun() {
+      clearTimers();
+      results = [];
+      summary.textContent = '';
+      beginTrial();
+    }
+
+    function beginTrial() {
+      clearTimers();
+      state = 'wait';
+      setVisual('is-wait');
+      btn.textContent = '等待…';
+      hint.textContent = '红色时等待，别点';
+      last.textContent = results.length ? '已完成 ' + results.length + ' 次' : '';
+      renderProgress();
+
+      var delay = 2000 + Math.random() * 8000; // 随机 2~10 秒
+      timer = setTimeout(function () {
+        state = 'go';
+        setVisual('is-go');
+        btn.textContent = '点！';
+        hint.textContent = '变绿了，快点击！';
+        goTime = performance.now();
+      }, delay);
+    }
+
+    function record(time) {
+      results.push(time);
+      last.textContent = '第 ' + results.length + ' 次：' + Math.round(time) + ' ms';
+
+      if (results.length < TOTAL) {
+        state = 'paused';
+        setVisual('');
+        btn.textContent = '准备…';
+        hint.textContent = '下一轮马上开始';
+        renderProgress();
+        pauseTimer = setTimeout(beginTrial, 1200);
+      } else {
+        finishRun();
+      }
+    }
+
+    function finishRun() {
+      clearTimers();
+      state = 'done';
+      setVisual('');
+      btn.textContent = '再测一轮';
+      hint.textContent = '本轮 7 次已完成';
+      progress.textContent = '本轮完成';
+      renderSummary();
+      addToday(results);
+      renderRecords();
+    }
+
+    function renderSummary() {
+      var best = results.reduce(function (m, v) { return v < m ? v : m; }, Infinity);
+      var avg = Math.round(results.reduce(function (a, b) { return a + b; }, 0) / results.length);
+      var chips = results.map(function (t, i) {
+        return '<span class="chip">' + (i + 1) + ' · ' + Math.round(t) + ' ms</span>';
+      }).join('');
+
+      summary.innerHTML =
+        '<div class="summary-title">本轮结果</div>' +
+        '<div class="chips">' + chips + '</div>' +
+        '<div class="summary-stats">本轮最快 ' + Math.round(best) + ' ms · 本轮平均 ' + avg + ' ms</div>';
+    }
+
+    // ---------- 数据留存 ----------
+    function loadRecords() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+      catch (e) { return {}; }
+    }
+
+    function saveRecords(obj) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(obj)); }
+      catch (e) {}
+    }
+
+    function todayKey() {
+      var d = new Date();
+      var m = ('0' + (d.getMonth() + 1)).slice(-2);
+      var day = ('0' + d.getDate()).slice(-2);
+      return d.getFullYear() + '-' + m + '-' + day;
+    }
+
+    function addToday(times) {
+      var obj = loadRecords();
+      var key = todayKey();
+      var arr = (obj[key] || []).concat(times);
+      if (arr.length > 2000) arr = arr.slice(-2000);
+      obj[key] = arr;
+      saveRecords(obj);
+    }
+
+    function formatDate(key) {
+      var p = key.split('-');
+      return parseInt(p[1], 10) + '月' + parseInt(p[2], 10) + '日';
+    }
+
+    function renderRecords() {
+      var obj = loadRecords();
+      var keys = Object.keys(obj).sort().reverse();
+      recordList.innerHTML = '';
+
+      if (!keys.length) {
+        recordList.innerHTML = '<div class="empty">还没有记录，完成一轮后会自动出现在这里。</div>';
+        return;
+      }
+
+      var tk = todayKey();
+      keys.forEach(function (key) {
+        var arr = obj[key];
+        var best = arr.reduce(function (m, v) { return v < m ? v : m; }, Infinity);
+        var avg = Math.round(arr.reduce(function (a, b) { return a + b; }, 0) / arr.length);
+
+        var row = document.createElement('div');
+        row.className = 'record-row' + (key === tk ? ' today' : '');
+        row.innerHTML =
+          '<div class="date">' + formatDate(key) +
+            '<small>' + (key === tk ? '今天 · ' : '') + arr.length + ' 次</small></div>' +
+          '<div class="metric"><b>' + Math.round(best) + '</b><small>最快 ms</small></div>' +
+          '<div class="metric"><b>' + avg + '</b><small>平均 ms</small></div>';
+        recordList.appendChild(row);
+      });
+    }
+
+    // ---------- 每日一句 ----------
+    var QUOTES = [
+      '路虽远，行则将至；事虽难，做则必成。',
+      '今天的努力，是明天惊喜的铺垫。',
+      '慢慢来，比较快。',
+      '每一次专注，都在悄悄变强。',
+      '别怕走得慢，只怕原地不动。',
+      '好习惯是复利，坚持就有回报。',
+      '把今天过好，就是对未来最大的负责。',
+      '你不是没有天赋，你只是还没坚持够。',
+      '行动是治愈焦虑的良药。',
+      '先完成，再完美。',
+      '小步快跑，胜过原地徘徊。',
+      '坚持不下去时，再坚持一下。',
+      '心若向阳，无畏悲伤。',
+      '时间不会辜负每一个认真的人。',
+      '每天进步一点点，一年就是一大步。',
+      '你只管努力，剩下的交给时间。',
+      '专注当下，静待花开。',
+      '山有顶峰，海有彼岸，努力自有回响。',
+      '认真生活的你，值得被岁月温柔以待。',
+      '不积跬步，无以至千里。',
+      '相信自己，你比想象中更强大。',
+      '成长，就是不断突破昨天的自己。',
+      '好运藏在坚持里。',
+      '别想太多，先做起来。',
+      '每一次克制，都是成长。',
+      '保持热爱，奔赴山海。',
+      '稳住心态，你就赢了一半。',
+      '当下即是最好的开始。',
+      '努力不一定立刻有结果，但一定在变好。',
+      '把简单的事做好，就是不简单。',
+      '愿你不负时光，不负自己。'
+    ];
+
+    function renderQuote() {
+      var now = new Date();
+      var start = new Date(now.getFullYear(), 0, 0);
+      var idx = Math.floor((now - start) / 86400000);
+      var week = ['日', '一', '二', '三', '四', '五', '六'][now.getDay()];
+      document.getElementById('quoteDate').textContent =
+        (now.getMonth() + 1) + '月' + now.getDate() + '日 星期' + week;
+      document.getElementById('quoteText').textContent = QUOTES[idx % QUOTES.length];
+    }
+
+    // ---------- 交互 ----------
+    btn.addEventListener('click', function () {
+      if (state === 'idle' || state === 'done') {
+        beginRun();
+      } else if (state === 'wait') {
+        clearTimers();
+        state = 'paused';
+        setVisual('');
+        btn.textContent = '抢跑…';
+        hint.textContent = '别急，红色时等待';
+        pauseTimer = setTimeout(beginTrial, 1000);
+      } else if (state === 'go') {
+        record(performance.now() - goTime);
+      }
+      // paused 状态下点击无效
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault();
+        btn.click();
+      }
+    });
+
+    clearBtn.addEventListener('click', function () {
+      if (confirm('确定清空所有每日记录吗？此操作不可恢复。')) {
+        try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+        renderRecords();
+      }
+    });
+
+    renderProgress();
+    renderQuote();
+    renderRecords();
+  })();
+</script>
+</body>
+</html>
