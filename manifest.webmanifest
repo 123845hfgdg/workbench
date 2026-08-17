@@ -1,0 +1,30 @@
+{
+  "name": "工作台",
+  "short_name": "工作台",
+  "description": "反应力训练与每日记录",
+  "id": "/workbench/",
+  "start_url": "/workbench/",
+  "scope": "/workbench/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#141821",
+  "theme_color": "#141821",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
